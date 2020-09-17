@@ -6,16 +6,40 @@ const mongoose = require('mongoose');
 const Chat = require('./Models/Chat');
 const Comment = require('./Models/Comments')
 const Foro = require('./Models/Foro')
+const Visitas = require('./Models/Visitas')
 
 mongoose.set('useFindAndModify', false);
 
 mongoose.Promise = global.Promise;
 
+const newVisitaDate = (model, io) => {
+
+  model.save((err)=> {
+    if (err) {
+      console.log(err);
+    }
+    else{
+      io.emit('searchVisit', {})
+    }
+  })
+}
+
+const updateVisitaDate = (model, io, date) => {
+  model.updateOne({fecha: date}, {$inc: {visitas: 1} }, (err) => {
+    if (err) {
+      console.log(err);
+    }
+    else{
+      io.emit('searchVisit', {})
+    }
+  })
+}
+
 mongoose.connect(Config.db, { useNewUrlParser: true , useUnifiedTopology: true})
         .then(() => {
           
           io.on("connection", (socket) => {
-
+            console.log('connect');
             socket.on("requestMessage", (data) => {
               const Model = mongoose.model(`ChatCollection${data}`, Chat);
 
@@ -119,7 +143,39 @@ mongoose.connect(Config.db, { useNewUrlParser: true , useUnifiedTopology: true})
               
             })
 
-          })
+            // Contador de Visitas
+            socket.on('requestVisitas', (data) => {
+              
+              Visitas.find({},(err, data) => {
+
+                if (err) {
+                  console.log(err);
+                }
+                else{
+                  socket.emit('receivedVisit', data)
+                }
+                
+              });
+
+            });
+
+            socket.on('newVisit', (data) => {
+
+              const date = new Date()
+              const dateNow = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`
+
+              Visitas.findOne({fecha: dateNow}, (err, data) => {
+                if (err || !data) {
+                  newVisitaDate(new Visitas(), io);
+                }
+                else{
+                  updateVisitaDate(Visitas, io, dateNow)
+                }
+              })
+
+            })
+
+          });
 
 
           http.listen(Config.port, () => {
